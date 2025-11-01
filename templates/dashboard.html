@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flood Alert Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #eef3f7; text-align: center; }
+    table { margin: 20px auto; border-collapse: collapse; width: 90%; background: #fff; }
+    th, td { padding: 10px; border: 1px solid #ccc; }
+    th { background: #f6fbff; color: #083a5c; }
+    h1 { color: #0a4b78; margin-top: 18px; }
+    canvas { max-width: 900px; margin: 24px auto 40px; display: block; }
+  </style>
+</head>
+<body>
+  <h1>🌊 Flood Monitoring Dashboard</h1>
+
+  <table id="dataTable">
+    <tr><th>Timestamp</th><th>Flow (L/min)</th><th>Level (%)</th><th>Rain (%)</th><th>Risk</th></tr>
+    {% for row in data %}
+      <tr>
+        <td>{{ row[0] }}</td>
+        <td>{{ row[1] }}</td>
+        <td>{{ row[2] }}</td>
+        <td>{{ row[3] }}</td>
+        <td><b>{{ row[4] }}</b></td>
+      </tr>
+    {% endfor %}
+  </table>
+
+  <canvas id="riskChart"></canvas>
+
+  <script>
+    // Initial snapshot for first paint (safe fallbacks)
+    const initialLabels = {{ (data | map(attribute=0) | list) | tojson | safe }} || [];
+    const initialLevels = {{ (data | map(attribute=2) | list) | tojson | safe }} || [];
+
+    // Chart.js line chart
+    const ctx = document.getElementById('riskChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: initialLabels,
+        datasets: [{
+          label: 'Water Level (%)',
+          data: initialLevels,
+          borderColor: '#1f65d6',
+          backgroundColor: 'rgba(31,101,214,0.08)',
+          borderWidth: 2,
+          tension: 0.25,
+          pointRadius: 2,
+        }]
+      },
+      options: {
+        responsive: true,
+        animation: false,
+        scales: {
+          y: { beginAtZero: true, suggestedMax: 100 }
+        },
+        plugins: {
+          legend: { display: true }
+        }
+      }
+    });
+
+    // Render the table rows
+    function renderTable(rows) {
+      const table = document.getElementById('dataTable');
+      table.innerHTML = `
+        <tr><th>Timestamp</th><th>Flow (L/min)</th><th>Level (%)</th><th>Rain (%)</th><th>Risk</th></tr>
+        ${rows.map(r => `<tr>
+          <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td><b>${r[4]}</b></td>
+        </tr>`).join('')}
+      `;
+    }
+
+    // Poll the backend; use cache-busting query to avoid any proxies/CDNs caching JSON
+    async function refreshData() {
+      try {
+        console.log("Polling /feed", new Date().toISOString());
+        const res = await fetch(`/feed?_=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) {
+          console.warn('Feed HTTP', res.status);
+          return;
+        }
+        const rows = await res.json(); // [[ts, flow, level, rain, risk], ...]
+        if (!Array.isArray(rows)) return;
+
+        // Update table
+        renderTable(rows);
+
+        // Update chart
+        chart.data.labels = rows.map(r => r[0]);
+        chart.data.datasets[0].data = rows.map(r => r[2]);
+        chart.update('none');
+      } catch (e) {
+        console.warn('Refresh failed', e);
+      }
+    }
+
+    // Kick an immediate refresh, then poll every 5s
+    refreshData();
+    setInterval(refreshData, 5000);
+  </script>
+</body>
+</html>
