@@ -120,9 +120,9 @@ http://127.0.0.1:5000/
 
 ### 👨‍💻 Developed By
 
-**Priya Dharshan**
+**Sanjay S**
 💬 “Smart automation for safer communities.”
-📧 Reach me: *[Add your email or LinkedIn link here]*
+
 
 ---
 
