@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Flood Report & Feedback</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#eef3f7; margin:0; }
+    header { background:#0a4b78; color:#fff; padding:16px; text-align:center; }
+    main { max-width:800px; margin:20px auto; background:#fff; padding:18px; border:1px solid #ddd; border-radius:10px; }
+    h1 { margin:0; font-size:22px; }
+    .row { display:flex; gap:12px; }
+    .col { flex:1; }
+    label { display:block; margin:10px 0 6px; color:#0a4b78; }
+    input[type="text"], input[type="email"], input[type="tel"], textarea, select {
+      width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;
+    }
+    textarea { resize:vertical; }
+    .help { color:#666; font-size:12px; }
+    .images { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+    .thumb { width:110px; height:110px; border:1px solid #ddd; border-radius:6px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:#fafafa; position:relative; }
+    .thumb img { width:100%; height:100%; object-fit:cover; }
+    .remove { position:absolute; top:4px; right:4px; background:#0008; color:#fff; border:none; border-radius:50%; width:22px; height:22px; cursor:pointer; }
+    .actions { display:flex; justify-content:flex-end; margin-top:18px; }
+    button[type="submit"] { background:#0a4b78; color:#fff; border:0; border-radius:6px; padding:12px 18px; cursor:pointer; font-weight:bold; }
+    .status { margin-left:12px; color:#0a4b78; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Report Flood Issue / Send Feedback</h1>
+  </header>
+
+  <main>
+    <form id="reportForm" action="/report" method="POST" enctype="multipart/form-data">
+      <div class="row">
+        <div class="col">
+          <label for="name">Your Name</label>
+          <input id="name" name="name" type="text" required placeholder="Full name">
+        </div>
+        <div class="col">
+          <label for="contact">Contact (Email or Phone)</label>
+          <input id="contact" name="contact" type="text" required placeholder="email@example.com or +1 555 000 0000">
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <label for="location">Location</label>
+          <input id="location" name="location" type="text" required placeholder="City, area, landmark">
+          <div class="help">Optionally use “Use GPS” to auto-fill coordinates below.</div>
+        </div>
+        <div class="col">
+          <label for="severity">Severity</label>
+          <select id="severity" name="severity" required>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <label for="lat">Latitude</label>
+          <input id="lat" name="lat" type="text" placeholder="e.g., 12.9716">
+        </div>
+        <div class="col">
+          <label for="lng">Longitude</label>
+          <input id="lng" name="lng" type="text" placeholder="e.g., 77.5946">
+        </div>
+      </div>
+
+      <div>
+        <button type="button" id="gpsBtn" style="padding:8px 12px; border:1px solid #0a4b78; background:#e6f0f6; color:#0a4b78; border-radius:6px; cursor:pointer;">
+          Use GPS
+        </button>
+        <span id="gpsStatus" class="help"></span>
+      </div>
+
+      <label for="description">Description</label>
+      <textarea id="description" name="description" rows="4" required placeholder="Describe the situation, water depth, people affected, roadblocks, etc."></textarea>
+
+      <label for="images">Upload Proof Images</label>
+      <input id="images" name="images" type="file" accept="image/*" multiple>
+      <div id="preview" class="images"></div>
+
+      <div class="actions">
+        <button type="submit">Submit Report</button>
+        <span class="status" id="status"></span>
+      </div>
+    </form>
+  </main>
+
+  <script>
+    // GPS capture
+    const gpsBtn = document.getElementById('gpsBtn');
+    const gpsStatus = document.getElementById('gpsStatus');
+    gpsBtn.addEventListener('click', () => {
+      gpsStatus.textContent = 'Requesting location...';
+      if (!navigator.geolocation) {
+        gpsStatus.textContent = 'Geolocation not supported by this browser.';
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          document.getElementById('lat').value = pos.coords.latitude.toFixed(6);
+          document.getElementById('lng').value = pos.coords.longitude.toFixed(6);
+          gpsStatus.textContent = 'Location captured.';
+        },
+        (err) => {
+          gpsStatus.textContent = 'Unable to get location: ' + err.message;
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+
+    // Image previews and remove
+    const input = document.getElementById('images');
+    const preview = document.getElementById('preview');
+    input.addEventListener('change', () => {
+      preview.innerHTML = '';
+      [...input.files].forEach((file, idx) => {
+        const url = URL.createObjectURL(file);
+        const holder = document.createElement('div');
+        holder.className = 'thumb';
+        holder.innerHTML = `<img src="${url}" alt="preview ${idx}"><button type="button" class="remove" title="Remove">&times;</button>`;
+        holder.querySelector('.remove').addEventListener('click', () => {
+          // Remove file from input by rebuilding FileList
+          const dt = new DataTransfer();
+          [...input.files].forEach((f, i) => { if (i !== idx) dt.items.add(f); });
+          input.files = dt.files;
+          holder.remove();
+        });
+        preview.appendChild(holder);
+      });
+    });
+
+    // Submit UX (stays standard POST; shows status)
+    const form = document.getElementById('reportForm');
+    const statusEl = document.getElementById('status');
+    form.addEventListener('submit', () => {
+      statusEl.textContent = 'Uploading...';
+      setTimeout(() => { statusEl.textContent = ''; }, 6000);
+    });
+  </script>
+</body>
+</html>
